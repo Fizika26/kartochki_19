@@ -89,6 +89,11 @@ button:focus-visible{outline:3px solid #9ff0b9;outline-offset:2px}
 .res .y{background:#d9f7e4;color:#0d4a28}.res .n{background:#ffd9d9;color:#8f1d22}
 .empty p{margin:0 0 6px}
 .empty .btn.prim{background:var(--blue);color:#fff}
+.scene{position:relative}
+.stamp{position:absolute;inset:0;border-radius:14px;pointer-events:none;opacity:0;z-index:2;border:5px solid transparent;display:flex;justify-content:center;align-items:flex-start;padding-top:22px}
+.stamp.yes{border-color:#25b863;background:rgba(37,184,99,.16)}.stamp.no{border-color:#e5484d;background:rgba(229,72,77,.16)}
+.stamp span{font:800 26px "Golos Text",sans-serif;padding:6px 18px;border-radius:10px;border:3px solid;background:var(--card);transform:rotate(-6deg)}
+.stamp.yes span{color:#1d8f4d;border-color:#25b863}.stamp.no span{color:#c8282e;border-color:#e5484d}
 /* список */
 .list{margin-top:34px}
 .list h2{font-size:24px;margin:0 0 12px}
@@ -279,13 +284,14 @@ const TOP=[["mech","Механика"],["heat","Тепловые явления"
 const TN=Object.fromEntries(TOP);
 const $=s=>document.querySelector(s);
 let mode="learn",topic="mech",etopic="all";
-const L={deck:[],pos:0,flipped:false};
+const L={queue:[],pos:0,flipped:false,res:{},round:1};
 const X={phase:"exam",set:[],queue:[],pos:0,flipped:false,res:{},round:1};
 const pool=t=>C.map((c,i)=>i).filter(i=>t==="all"||C[i].t===t);
 const numIn=i=>C.filter((c,j)=>j<=i&&c.t===C[i].t).length;
 const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-const startLearn=()=>{drawChips();L.deck=pool(topic);L.pos=0;L.flipped=false;draw()};
-const startExam=()=>{drawChips();X.set=shuffle(pool(etopic)).slice(0,5);X.queue=X.set.slice();X.phase="exam";X.pos=0;X.flipped=false;X.res={};X.first={};X.round=1;draw()};
+const startLearn=()=>{drawChips();L.queue=pool(topic);L.pos=0;L.flipped=false;L.res={};L.round=1;draw()};
+const startExam=()=>{drawChips();X.set=shuffle(pool(etopic)).slice(0,5);X.queue=X.set.slice();X.phase="exam";X.pos=0;X.flipped=false;X.res={};X.round=1;draw()};
+const S=()=>mode==="learn"?L:X;
 const cardHTML=(i,fl,hint)=>{const c=C[i],n=numIn(i);return `<div class="scene" id="scene"><div class="card${fl?" flip":""}" id="card" tabindex="0" role="button" aria-label="Карточка. Нажми, чтобы перевернуть">
   <div class="face front" aria-hidden="${fl}"><div class="head"><span class="no">№ ${n}</span><span class="tag">${TN[c.t]}</span></div>
    <p class="q">${c.q}</p>${c.f?`<div class="fig${c.wide?" wide":""}">${c.f}</div>`:""}
@@ -293,17 +299,22 @@ const cardHTML=(i,fl,hint)=>{const c=C[i],n=numIn(i);return `<div class="scene" 
   <div class="face back" aria-hidden="${!fl}"><div class="head"><span class="no">Ответ</span><span class="tag">№ ${n}</span></div>
    <p class="a"><span>${c.a}</span></p><p class="e">${c.e}</p>
    <div class="hint">Нажми, чтобы снова увидеть задачу</div></div>
- </div></div>`};
-const arrow=(id,d,dis,lab)=>`<button class="arrow" id="${id}" aria-label="${lab}" ${dis?"disabled":""}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg></button>`;
+ </div><div class="stamp" id="stamp" aria-hidden="true"><span></span></div></div>`};
+const YN=`<button class="btn again" id="no">← Не знаю</button><button class="btn know" id="yes">Знаю →</button>`;
 const draw=()=>{
  const st=$("#stage");
  if(mode==="learn"){
-  const i=L.deck[L.pos];
-  st.innerHTML=cardHTML(i,L.flipped,"Нажми, чтобы перевернуть")+
-   `<div class="nav">${arrow("prev","M15 5l-7 7 7 7",L.pos===0,"Предыдущая")}<div class="cnt">${L.pos+1} из ${L.deck.length}</div>${arrow("next","M9 5l7 7-7 7",L.pos===L.deck.length-1,"Следующая")}</div>
-   <div class="swipe">Свайпай карточку влево и вправо</div>`;
+  if(L.pos>=L.queue.length){
+   const wrong=L.queue.filter(i=>L.res[i]==="n");
+   if(wrong.length){L.queue=wrong;L.pos=0;L.res={};L.round++;L.flipped=false}
+   else{st.innerHTML=`<div class="empty"><h2>Тема выучена!</h2><p>Ты знаешь все карточки темы «${TN[topic]}».</p>${L.round>1?`<p>Понадобилось кругов: ${L.round}.</p>`:""}
+    <div class="mid"><button class="btn prim" id="restart">Пройти ещё раз</button><button class="btn flipb" id="toExam" style="border:1.5px solid var(--blue)">Экзамен</button></div></div>`;return}
+  }
+  const i=L.queue[L.pos];
+  const lab=L.round>1?`Повтор «не знаю»${L.round>2?` · круг ${L.round}`:""} <span>${L.pos+1} из ${L.queue.length}</span>`:`${TN[topic]} <span>${L.pos+1} из ${L.queue.length}</span>`;
+  st.innerHTML=`<div class="label">${lab}</div>`+cardHTML(i,L.flipped,"Нажми, чтобы перевернуть")+
+   `<div class="mid ctl2">${YN}</div><div class="swipe">Свайп вправо — знаю, влево — не знаю</div>`;
   bindSwipe();return}
- // экзамен
  if(X.pos>=X.queue.length){
   if(X.phase==="exam"){
    const wrong=X.set.filter(i=>X.res[i]==="n");const ok=X.set.length-wrong.length;
@@ -320,34 +331,38 @@ const draw=()=>{
  const i=X.queue[X.pos];
  const lab=X.phase==="exam"?`Экзамен <span>вопрос ${X.pos+1} из ${X.queue.length}</span>`:`Отработка${X.round>1?` · круг ${X.round}`:""} <span>${X.pos+1} из ${X.queue.length}</span>`;
  st.innerHTML=`<div class="label">${lab}</div>`+cardHTML(i,X.flipped,"Подумай, потом нажми «Показать ответ»")+
-  `<div class="mid ctl2">${X.flipped?`<button class="btn again" id="no">Не знаю</button><button class="btn know" id="yes">Знаю</button>`:`<button class="btn flipb" id="show">Показать ответ</button>`}</div>`;
- bindTap();
+  `<div class="mid ctl2">${X.flipped?YN:`<button class="btn flipb" id="show">Показать ответ</button>`}</div>${X.flipped?`<div class="swipe">Свайп вправо — знаю, влево — не знаю</div>`:""}`;
+ bindSwipe();
 };
+const canJudge=()=>mode==="learn"||X.flipped;
 const setFlip=v=>{const el=$("#card");if(!el)return;el.classList.toggle("flip",v);el.querySelector(".front").setAttribute("aria-hidden",v);el.querySelector(".back").setAttribute("aria-hidden",!v)};
-const flip=()=>{if(mode==="learn"){L.flipped=!L.flipped;setFlip(L.flipped)}else{X.flipped=!X.flipped;setFlip(X.flipped);
- const m=$(".ctl2");if(m)m.innerHTML=X.flipped?`<button class="btn again" id="no">Не знаю</button><button class="btn know" id="yes">Знаю</button>`:`<button class="btn flipb" id="show">Показать ответ</button>`}};
-const learnGo=(d,animate)=>{const p=L.pos+d;if(p<0||p>=L.deck.length)return false;
- const sc=$("#scene");
- const go=()=>{L.pos=p;L.flipped=false;draw();const n=$("#scene");if(n&&animate){n.style.transform=`translateX(${d*40}px)`;n.style.opacity="0";requestAnimationFrame(()=>{n.classList.add("anim");n.style.transform="";n.style.opacity=""})}};
- if(sc&&animate){sc.classList.add("anim");sc.style.transform=`translateX(${-d*110}%) rotate(${-d*8}deg)`;sc.style.opacity="0";setTimeout(go,200)}else go();
- return true};
-const bindTap=()=>{const c=$("#card");if(c)c.addEventListener("click",flip)};
+const flip=()=>{const s=S();s.flipped=!s.flipped;setFlip(s.flipped);
+ if(mode==="exam"){const m=$(".ctl2");if(m)m.innerHTML=X.flipped?YN:`<button class="btn flipb" id="show">Показать ответ</button>`;
+  const sw=$(".swipe");if(X.flipped&&!sw)m.insertAdjacentHTML("afterend",`<div class="swipe">Свайп вправо — знаю, влево — не знаю</div>`);else if(!X.flipped&&sw)sw.remove()}};
+const tint=(dx)=>{const t=$("#stamp");if(!t)return;const a=Math.min(1,Math.abs(dx)/110);
+ if(Math.abs(dx)<4){t.style.opacity=0;return}
+ const yes=dx>0;t.className="stamp "+(yes?"yes":"no");t.firstChild.textContent=yes?"Знаю":"Не знаю";t.style.opacity=a};
+let busy=false;
+const judge=v=>{if(busy||!canJudge())return;busy=true;
+ const sc=$("#scene");const d=v==="y"?1:-1;
+ if(sc){tint(d*200);sc.classList.add("anim");sc.style.transform=`translateX(${d*120}%) rotate(${d*10}deg)`;sc.style.opacity="0"}
+ setTimeout(()=>{const s=S();s.res[s.queue[s.pos]]=v;s.pos++;s.flipped=false;draw();busy=false;
+  const n=$("#scene");if(n){n.style.transform="translateY(14px) scale(.97)";n.style.opacity="0";requestAnimationFrame(()=>{n.classList.add("anim");n.style.transform="";n.style.opacity=""})}},sc?220:0)};
 const bindSwipe=()=>{
  const sc=$("#scene");if(!sc)return;let x0=null,y0=0,dx=0,drag=false;
- sc.addEventListener("pointerdown",e=>{x0=e.clientX;y0=e.clientY;dx=0;drag=false;sc.classList.remove("anim")});
+ sc.addEventListener("pointerdown",e=>{if(busy)return;x0=e.clientX;y0=e.clientY;dx=0;drag=false;sc.classList.remove("anim")});
  sc.addEventListener("pointermove",e=>{if(x0===null)return;dx=e.clientX-x0;const dy=e.clientY-y0;
   if(!drag&&Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){drag=true;try{sc.setPointerCapture(e.pointerId)}catch(_){}}
-  if(drag)sc.style.transform=`translateX(${dx}px) rotate(${dx/25}deg)`});
+  if(drag){const k=canJudge()?1:.25;sc.style.transform=`translateX(${dx*k}px) rotate(${dx*k/25}deg)`;if(canJudge())tint(dx)}});
+ const reset=()=>{sc.classList.add("anim");sc.style.transform="";tint(0)};
  const end=()=>{if(x0===null)return;x0=null;
   if(!drag){flip();return}
-  const d=dx<0?1:-1;
-  if(Math.abs(dx)>80&&learnGo(d,true))return;
-  sc.classList.add("anim");sc.style.transform=""};
- sc.addEventListener("pointerup",end);sc.addEventListener("pointercancel",()=>{x0=null;sc.classList.add("anim");sc.style.transform=""});
+  if(canJudge()&&Math.abs(dx)>90){judge(dx>0?"y":"n");return}
+  reset()};
+ sc.addEventListener("pointerup",end);sc.addEventListener("pointercancel",()=>{x0=null;reset()});
 };
-const mark=v=>{X.res[X.queue[X.pos]]=v;X.pos++;X.flipped=false;draw()};
 $("#stage").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
- ({prev:()=>learnGo(-1,true),next:()=>learnGo(1,true),show:flip,yes:()=>mark("y"),no:()=>mark("n"),
+ ({show:flip,yes:()=>judge("y"),no:()=>judge("n"),restart:startLearn,toExam:()=>setMode("exam"),
    drill:()=>{X.phase="drill";X.queue=shuffle(X.set.filter(i=>X.res[i]==="n"));X.pos=0;X.res={};X.round=1;X.flipped=false;draw()},
    newExam:startExam,toLearn:()=>setMode("learn")}[b.id]||(()=>{}))()});
 const setMode=m=>{mode=m;document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-selected",b.dataset.m===m));m==="learn"?startLearn():startExam()};
@@ -355,9 +370,9 @@ document.querySelector(".seg").addEventListener("click",e=>{const b=e.target.clo
 const drawChips=()=>{const list=mode==="learn"?TOP:[["all","Все темы"],...TOP];const cur=mode==="learn"?topic:etopic;
  $("#chips").innerHTML=list.map(([k,n])=>`<button class="chip" data-t="${k}" aria-pressed="${k===cur}">${n}</button>`).join("")};
 $("#chips").addEventListener("click",e=>{const c=e.target.closest(".chip");if(!c)return;if(mode==="learn"){topic=c.dataset.t;startLearn()}else{etopic=c.dataset.t;startExam()}});
-document.addEventListener("keydown",e=>{if(e.target.closest("button"))return;
- if(e.key===" "||e.key==="Enter"){if($("#card")){e.preventDefault();flip()}}
- else if(mode==="learn"&&e.key==="ArrowRight")learnGo(1,true);else if(mode==="learn"&&e.key==="ArrowLeft")learnGo(-1,true)});
+document.addEventListener("keydown",e=>{if(e.target.closest("button"))return;if(!$("#card"))return;
+ if(e.key===" "||e.key==="Enter"){e.preventDefault();flip()}
+ else if(e.key==="ArrowRight")judge("y");else if(e.key==="ArrowLeft")judge("n")});
 startLearn();
 }
 </script>
